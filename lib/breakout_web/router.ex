@@ -20,6 +20,7 @@ defmodule BreakoutWeb.Router do
     # drank
     #get "/", PageController, :index
     get "/", GameController, :index
+    live "/cursors", Cursors
   end
 
   # Other scopes may use custom stacks.

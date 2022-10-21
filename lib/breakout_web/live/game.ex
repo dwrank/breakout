@@ -16,6 +16,11 @@ defmodule BreakoutWeb.Live.Game do
           distance: number()
         }
 
+  @type cursor :: %{
+          x: number(),
+          y: number(),
+        }
+
   def render(assigns) do
     BreakoutWeb.GameView.render("index.html", assigns)
   end
@@ -27,8 +32,11 @@ defmodule BreakoutWeb.Live.Game do
     socket =
       socket
       |> assign(state)
+      |> assign(:cursor, %{x: 0, y: 0})
       |> assign(:blocks, Blocks.build_board(state.level, state.unit, state.unit))
       |> assign(:bricks, Blocks.build_bricks(state.level, state.unit, state.unit))
+
+    socket = push_event(socket, "initial_state", state)
 
     if connected?(socket) do
       {:ok, schedule_tick(socket)}
@@ -58,6 +66,11 @@ defmodule BreakoutWeb.Live.Game do
     {:noreply, on_stop_input(socket, key)}
   end
 
+  def handle_event("cursor-move", %{"x" => x, "y" => y}, socket) do
+    #IO.inspect(x, label: "cursor-move")
+    {:noreply, on_cursor_input(socket, round(x), round(y))}
+  end
+
   @spec game_loop(Socket.t()) :: Socket.t()
   defp game_loop(%{assigns: %{game_state: :playing}} = socket) do
     socket
@@ -81,6 +94,7 @@ defmodule BreakoutWeb.Live.Game do
     case paddle.direction do
       :left -> assign(socket, :paddle, move_paddle_left(paddle, unit))
       :right -> assign(socket, :paddle, move_paddle_right(paddle, unit))
+      :to_cursor -> assign(socket, :paddle, move_paddle_to_cursor(socket))
       :stationary -> socket
     end
   end
@@ -97,6 +111,44 @@ defmodule BreakoutWeb.Live.Game do
     new_left = min(paddle.left + paddle.speed, unit * (@board_cols - paddle.length - 1))
 
     %{paddle | left: new_left, right: paddle.right + (new_left - paddle.left)}
+  end
+
+  @spec move_paddle_to_cursor(Socket.t()) :: Socket.t()
+  defp move_paddle_to_cursor(%{assigns: %{paddle: paddle, cursor: cursor, unit: unit}} = socket) do
+    new_left = cursor.x - paddle.half_width
+
+    cond do
+      new_left < paddle.left ->
+        move_paddle_left_to_cursor(paddle, new_left, unit)
+      new_left > paddle.left ->
+        move_paddle_right_to_cursor(paddle, new_left, unit)
+      true ->
+        %{paddle | direction: :stationary}
+    end
+  end
+
+  @spec move_paddle_left_to_cursor(paddle(), number(), number()) :: paddle()
+  defp move_paddle_left_to_cursor(paddle, new_left, unit) do
+    paddle = move_paddle_left(paddle, unit)
+
+    cond do
+      new_left >= paddle.left ->
+        paddle = %{paddle | direction: :stationary}
+      true ->
+        paddle
+    end
+  end
+
+  @spec move_paddle_right_to_cursor(paddle(), number(), number()) :: paddle()
+  defp move_paddle_right_to_cursor(paddle, new_left, unit) do
+    paddle = move_paddle_right(paddle, unit)
+
+    cond do
+      new_left <= paddle.left ->
+        paddle = %{paddle | direction: :stationary}
+      true ->
+        paddle
+    end
   end
 
   @spec advance_ball(Socket.t()) :: Socket.t()
@@ -291,6 +343,23 @@ defmodule BreakoutWeb.Live.Game do
        do: stop_paddle(socket, :right)
 
   defp on_stop_input(socket, _), do: socket
+
+  # Handle mouse events
+  @spec on_cursor_input(Socket.t(), number(), number()) :: Socket.t()
+  defp on_cursor_input(%{assigns: %{game_state: :playing, paddle: paddle, cursor: cursor}} = socket, x, y) do
+    buffer = 5
+
+    cond do
+      x < paddle.left + paddle.half_width - buffer ||
+      x > paddle.left + paddle.half_width + buffer ->
+        socket
+        |> assign(:paddle, %{paddle | direction: :to_cursor})
+        |> assign(:cursor, %{cursor | x: x, y: y})
+      true -> socket
+    end
+  end
+
+  defp on_cursor_input(socket, _, _), do: socket
 
   @spec start_game(Socket.t()) :: Socket.t()
   defp start_game(%{assigns: %{game_state: :welcome}} = socket) do

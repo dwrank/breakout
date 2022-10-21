@@ -172,9 +172,10 @@ defmodule BreakoutWeb.Live.Config do
               id: String.t(),
               type: :paddle,
               visible: boolean(),
-              direction: :left | :right | :stationary,
+              direction: :left | :right | :to_cursor | :stationary,
               speed: number(),
-              length: number()
+              length: number(),
+              half_width: number(),
             }
 
       @type ball :: %{
@@ -221,7 +222,8 @@ defmodule BreakoutWeb.Live.Config do
           # Misc
           direction: :stationary,
           speed: @paddle_speed,
-          length: @paddle_length
+          length: @paddle_length,
+          half_width: @paddle_length * @unit / 2,
         }
       end
 
