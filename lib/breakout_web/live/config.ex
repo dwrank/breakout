@@ -189,8 +189,13 @@ defmodule BreakoutWeb.Live.Config do
               speed: number()
             }
 
+      @type cursor :: %{
+              x: number(),
+              y: number(),
+            }
+
       @spec initial_state() :: map()
-      defp initial_state do
+      def initial_state do
         %{
           game_state: :welcome,
           tick: @tick,
